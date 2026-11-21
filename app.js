@@ -5062,17 +5062,19 @@
       glow.scale.setScalar(0.18 + pulse * 0.12);
     });
 
-    // Glass and water share the mood.
+    // Glass and water share the mood. The frame steps back during the tour,
+    // letting the camera get close without a bright rail bisecting the subject.
+    const cinemaGlass = tour.active ? 0.62 : 1;
     if (glass.paneMaterial) {
       glass.paneMaterial.uniforms.uTime.value = shared.time;
       glass.paneMaterial.uniforms.uOpacity.value = 0.62 + p.glass * 0.055;
     }
     if (glass.railMaterial) {
-      glass.railMaterial.emissiveIntensity = 0.12 + p.glass * 0.24;
-      glass.railMaterial.opacity = 0.46 + p.glass * 0.075;
+      glass.railMaterial.emissiveIntensity = (0.12 + p.glass * 0.24) * (tour.active ? 0.8 : 1);
+      glass.railMaterial.opacity = (0.46 + p.glass * 0.075) * (tour.active ? 0.78 : 1);
     }
     glass.lineMaterials.forEach((entry, index) => {
-      entry.material.opacity = entry.baseOpacity * (0.62 + p.glass * 0.2) / (1 + index * 0.35);
+      entry.material.opacity = entry.baseOpacity * (0.62 + p.glass * 0.2) * cinemaGlass / (1 + index * 0.35);
     });
     glass.cornerGlows.forEach((s) => {
       const pulse = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(shared.time * 0.9 + s.userData.phase));
@@ -5638,6 +5640,7 @@
     const stage = document.getElementById('stage');
 
     const onPointerDown = (event) => {
+      if (tour.active) return;
       if (event.button !== undefined && event.button !== 0 && event.pointerType === 'mouse') return;
       state.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
       if (state.pointers.size === 1) {
@@ -5656,6 +5659,7 @@
     };
 
     const onPointerMove = (event) => {
+      if (tour.active) return;
       if (!state.pointers.has(event.pointerId)) return;
       state.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
@@ -5703,6 +5707,7 @@
     stage.addEventListener('pointercancel', finishPointer, { passive: true });
 
     stage.addEventListener('wheel', (event) => {
+      if (tour.active) return;
       event.preventDefault();
       const factor = Math.exp(event.deltaY * 0.00085);
       state.zoom = clamp(state.zoom * factor, 0.78, 1.42);
@@ -5710,6 +5715,7 @@
     }, { passive: false });
 
     stage.addEventListener('dblclick', () => {
+      if (tour.active) return;
       resetView();
     });
   }
@@ -5743,6 +5749,16 @@
     ui.range = document.getElementById('timeRange');
     ui.fill = document.getElementById('timelineFill');
     ui.glow = document.getElementById('timelineGlow');
+    ui.tourButton = document.getElementById('tourButton');
+    ui.cinema = document.getElementById('cinema');
+    ui.tourExit = document.getElementById('tourExit');
+    ui.tourCaption = document.getElementById('tourCaption');
+    ui.tourIndex = document.getElementById('tourIndex');
+    ui.tourKicker = document.getElementById('tourKicker');
+    ui.tourTitle = document.getElementById('tourTitle');
+    ui.tourSub = document.getElementById('tourSub');
+    ui.tourProgress = document.getElementById('tourProgress');
+    ui.tourVeil = document.getElementById('tourVeil');
   }
 
   function syncUI(force = false) {
@@ -5798,7 +5814,324 @@
     ui.range.addEventListener('change', releaseScrub);
     window.addEventListener('pointerup', releaseScrub);
 
+    if (ui.tourButton) {
+      ui.tourButton.addEventListener('click', () => startTour());
+    }
+    if (ui.tourExit) {
+      ui.tourExit.addEventListener('click', () => stopTour());
+    }
+
     syncUI(true);
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  17b · Cinematic one-take tour
+   * ------------------------------------------------------------------ */
+  const TOUR_DURATION = 50.0;
+  const TOUR_KEYS = [
+    { at: 0.0, target: [0.0, 0.48, 0.0], az: 0.585, polar: 1.19, dist: 28.4, hour: 16.12 },
+    { at: 4.0, target: [0.0, 0.46, 0.0], az: 0.72, polar: 1.18, dist: 26.4, hour: 16.24 },
+    { at: 9.0, target: [-0.7, 0.2, 0.1], az: 0.18, polar: 1.22, dist: 21.0, hour: 16.48 },
+    { at: 13.0, target: [-1.35, 0.1, -0.15], az: -0.55, polar: 1.26, dist: 16.0, hour: 16.72 },
+    { at: 18.0, target: [-0.65, -0.05, 0.45], az: -0.48, polar: 1.29, dist: 14.0, hour: 17.02 },
+    { at: 22.0, target: [0.15, -0.08, 0.9], az: -0.12, polar: 1.31, dist: 13.2, hour: 17.28 },
+    { at: 27.0, target: [1.1, -0.02, 1.6], az: 0.35, polar: 1.32, dist: 13.5, hour: 17.6 },
+    { at: 31.0, target: [2.25, 0.02, 2.3], az: 0.58, polar: 1.33, dist: 12.7, hour: 17.82 },
+    { at: 36.0, target: [1.4, 0.25, 2.0], az: 1.15, polar: 1.28, dist: 14.6, hour: 18.12 },
+    { at: 40.0, target: [-0.7, 0.9, -0.3], az: 1.48, polar: 1.17, dist: 17.5, hour: 18.38 },
+    { at: 44.0, target: [-1.25, 1.4, -1.2], az: 1.72, polar: 1.1, dist: 20.0, hour: 18.72 },
+    { at: 47.0, target: [-0.2, 0.7, 0.0], az: 1.95, polar: 1.13, dist: 24.0, hour: 18.98 },
+    { at: 50.0, target: [0.0, 0.45, 0.0], az: 2.18, polar: 1.17, dist: 29.5, hour: 19.4 },
+  ];
+
+  const TOUR_CHAPTERS = [
+    { from: 0.0, index: '00 / 05', kicker: 'AETHER TERRARIUM', title: '悬浮之境', sub: '一方悬浮在深空的微缩宇宙' },
+    { from: 9.0, index: '01 / 05', kicker: 'SNOWMELT', title: '雪线之上', sub: '融水从最高的岩脊落下' },
+    { from: 18.0, index: '02 / 05', kicker: 'THE RIVER', title: '蜿蜒之水', sub: '穿过桥、草地与午后的光' },
+    { from: 27.0, index: '03 / 05', kicker: 'SMALL LIVES', title: '微小生命', sub: '鹿群、羊群，和一只经过的蝴蝶' },
+    { from: 36.0, index: '04 / 05', kicker: 'THE SUMMIT', title: '雪峰', sub: '光停留在最高的岩脊' },
+    { from: 44.0, index: '05 / 05', kicker: 'NIGHTFALL', title: '暮色', sub: '世界在星光下慢慢呼吸' },
+  ];
+
+  const TOUR_TIMES = TOUR_KEYS.map((key) => key.at);
+  const TOUR_TRACKS = {
+    tx: TOUR_KEYS.map((key) => key.target[0]),
+    ty: TOUR_KEYS.map((key) => key.target[1]),
+    tz: TOUR_KEYS.map((key) => key.target[2]),
+    az: TOUR_KEYS.map((key) => key.az),
+    polar: TOUR_KEYS.map((key) => key.polar),
+    dist: TOUR_KEYS.map((key) => key.dist),
+    hour: TOUR_KEYS.map((key) => key.hour),
+  };
+
+  const tour = {
+    active: false,
+    exiting: false,
+    capture: false,
+    manual: false,
+    loop: true,
+    elapsed: 0,
+    hold: 0,
+    finished: false,
+    chapter: -1,
+    distanceScale: 1,
+    target: new V3(),
+    sample: {},
+    saved: null,
+    autoStarted: false,
+  };
+
+  const tourLook = new V3();
+
+  function sampleTourTrack(values, time) {
+    const count = values.length;
+    if (time <= TOUR_TIMES[0]) return values[0];
+    if (time >= TOUR_TIMES[count - 1]) return values[count - 1];
+    let i = 0;
+    while (i < count - 2 && time > TOUR_TIMES[i + 1]) i += 1;
+    const t0 = TOUR_TIMES[i];
+    const t1 = TOUR_TIMES[i + 1];
+    const span = Math.max(0.0001, t1 - t0);
+    const u = clamp((time - t0) / span, 0, 1);
+    const p0 = values[Math.max(0, i - 1)];
+    const p1 = values[i];
+    const p2 = values[i + 1];
+    const p3 = values[Math.min(count - 1, i + 2)];
+    const prevSpan = Math.max(0.001, TOUR_TIMES[i + 1] - TOUR_TIMES[Math.max(0, i - 1)]);
+    const nextSpan = Math.max(0.001, TOUR_TIMES[Math.min(count - 1, i + 2)] - TOUR_TIMES[i]);
+    const m1 = ((p2 - p0) / prevSpan) * span;
+    const m2 = ((p3 - p1) / nextSpan) * span;
+    const u2 = u * u;
+    const u3 = u2 * u;
+    return (2 * u3 - 3 * u2 + 1) * p1 +
+      (u3 - 2 * u2 + u) * m1 +
+      (-2 * u3 + 3 * u2) * p2 +
+      (u3 - u2) * m2;
+  }
+
+  function fillTourSample(time) {
+    const sample = tour.sample;
+    sample.tx = sampleTourTrack(TOUR_TRACKS.tx, time);
+    sample.ty = sampleTourTrack(TOUR_TRACKS.ty, time);
+    sample.tz = sampleTourTrack(TOUR_TRACKS.tz, time);
+    sample.az = sampleTourTrack(TOUR_TRACKS.az, time);
+    sample.polar = clamp(sampleTourTrack(TOUR_TRACKS.polar, time), 0.92, 1.37);
+    sample.dist = clamp(sampleTourTrack(TOUR_TRACKS.dist, time), 7.5, 38);
+    sample.hour = sampleTourTrack(TOUR_TRACKS.hour, time);
+    return sample;
+  }
+
+  function refreshTourLayout() {
+    const base = computeCameraDistance();
+    tour.distanceScale = clamp(base / 28.4, 1, 1.75);
+  }
+
+  function applyTourCamera(time) {
+    const sample = fillTourSample(time);
+    const az = sample.az + Math.sin(time * 0.16 + 0.7) * 0.008;
+    const polar = clamp(sample.polar + Math.sin(time * 0.21 + 2.1) * 0.004, 0.92, 1.37);
+    const dist = sample.dist * tour.distanceScale;
+    const sinPolar = Math.sin(polar);
+    tour.target.set(sample.tx, sample.ty, sample.tz);
+
+    camera.position.set(
+      tour.target.x + Math.sin(az) * sinPolar * dist,
+      tour.target.y + Math.cos(polar) * dist,
+      tour.target.z + Math.cos(az) * sinPolar * dist
+    );
+    tourLook.copy(tour.target);
+    tourLook.x += Math.sin(time * 0.17 + 1.2) * 0.018 * tour.distanceScale;
+    tourLook.y += 0.022 + Math.cos(time * 0.13) * 0.012 * tour.distanceScale;
+    camera.lookAt(tourLook);
+    camera.rotateZ(Math.sin(time * 0.11 + 1.9) * 0.004);
+  }
+
+  function getTourChapterIndex(time) {
+    let index = 0;
+    for (let i = 0; i < TOUR_CHAPTERS.length; i += 1) {
+      if (time >= TOUR_CHAPTERS[i].from) index = i;
+    }
+    return index;
+  }
+
+  function setTourChapter(index) {
+    const chapter = TOUR_CHAPTERS[index];
+    if (tour.chapter === index) return;
+    tour.chapter = index;
+    ui.tourIndex.textContent = chapter.index;
+    ui.tourKicker.textContent = chapter.kicker;
+    ui.tourTitle.textContent = chapter.title;
+    ui.tourSub.textContent = chapter.sub;
+  }
+
+  function updateTourOverlay(time) {
+    const chapterIndex = getTourChapterIndex(time);
+    setTourChapter(chapterIndex);
+    const chapter = TOUR_CHAPTERS[chapterIndex];
+    const introVeil = 1 - smoothstep(0, 1.8, time);
+    const outroVeil = smoothstep(TOUR_DURATION - 2.6, TOUR_DURATION, time);
+    let veil = Math.max(introVeil, outroVeil);
+    if (tour.hold > 0 || tour.finished) veil = 1;
+    ui.tourVeil.style.opacity = veil.toFixed(3);
+    ui.tourProgress.style.width = `${clamp(time / TOUR_DURATION, 0, 1) * 100}%`;
+    const chapterAge = time - chapter.from;
+    const captionWindow = chapterIndex === 0 ? 6.2 : 4.6;
+    const captionVisible = !tour.finished &&
+      chapterAge < captionWindow &&
+      veil < 0.55;
+    ui.tourCaption.classList.toggle('is-visible', captionVisible);
+  }
+
+  function updateTourFrame(dt) {
+    if (!tour.active) return;
+    if (!tour.manual) {
+      if (tour.hold > 0) {
+        tour.hold -= dt;
+        if (tour.hold <= 0) {
+          tour.hold = 0;
+          tour.elapsed = 0;
+          tour.chapter = -1;
+          tour.finished = false;
+        }
+      } else if (!tour.finished) {
+        tour.elapsed = Math.min(TOUR_DURATION, tour.elapsed + dt);
+        if (tour.elapsed >= TOUR_DURATION) {
+          tour.elapsed = TOUR_DURATION;
+          if (tour.loop) {
+            tour.hold = 1.15;
+          } else {
+            tour.finished = true;
+          }
+        }
+      }
+    }
+    const sample = fillTourSample(tour.elapsed);
+    state.hour = sample.hour;
+    applyTourCamera(tour.elapsed);
+    updateTourOverlay(tour.elapsed);
+  }
+
+  function startTour(options = {}) {
+    if (tour.active || tour.exiting) return;
+    tour.active = true;
+    tour.exiting = false;
+    tour.capture = Boolean(options.capture);
+    tour.manual = Boolean(options.manual);
+    tour.loop = options.loop !== false && !tour.capture;
+    tour.elapsed = 0;
+    tour.hold = 0;
+    tour.finished = false;
+    tour.chapter = -1;
+    tour.saved = {
+      hour: state.hour,
+      auto: state.auto,
+      zoom: state.zoom,
+      azimuth: state.azimuth,
+      targetAzimuth: state.targetAzimuth,
+      polar: state.polar,
+      targetPolar: state.targetPolar,
+      distance: state.distance,
+      targetDistance: state.targetDistance,
+    };
+    state.auto = false;
+    state.isDragging = false;
+    state.isScrubbing = false;
+    state.pointers.clear();
+    document.getElementById('stage')?.classList.remove('is-dragging');
+    document.body.classList.add('cinema-active');
+    document.body.classList.toggle('cinema-capture', tour.capture);
+    ui.cinema.classList.add('is-starting', 'is-active');
+    ui.cinema.setAttribute('aria-hidden', 'false');
+    window.setTimeout(() => {
+      ui.cinema.classList.remove('is-starting');
+    }, 90);
+    ui.tourCaption.classList.remove('is-visible');
+    ui.tourButton?.blur();
+    refreshTourLayout();
+    const sample = fillTourSample(0);
+    state.hour = sample.hour;
+    state.lastHourDisplay = -1;
+    applyTourCamera(0);
+    updateTourOverlay(0);
+    syncUI(true);
+    updateLighting(state.hour);
+  }
+
+  function stopTour() {
+    if (!tour.active || tour.exiting) return;
+    tour.exiting = true;
+    tour.manual = true;
+    ui.tourVeil.style.opacity = '1';
+    ui.tourCaption.classList.remove('is-visible');
+    window.setTimeout(() => {
+      const saved = tour.saved;
+      tour.active = false;
+      tour.exiting = false;
+      tour.manual = false;
+      tour.capture = false;
+      tour.loop = true;
+      tour.hold = 0;
+      tour.finished = false;
+      tour.elapsed = 0;
+      tour.chapter = -1;
+      tour.saved = null;
+      ui.cinema.classList.remove('is-active', 'is-starting');
+      ui.cinema.setAttribute('aria-hidden', 'true');
+      ui.tourProgress.style.width = '0%';
+      document.body.classList.remove('cinema-active', 'cinema-capture');
+      window.setTimeout(() => {
+        if (!tour.active) ui.tourVeil.style.opacity = '0';
+      }, 900);
+      if (saved) {
+        state.hour = saved.hour;
+        state.auto = saved.auto;
+        state.zoom = saved.zoom;
+        state.azimuth = saved.azimuth;
+        state.targetAzimuth = saved.targetAzimuth;
+        state.polar = saved.polar;
+        state.targetPolar = saved.targetPolar;
+        state.distance = saved.distance;
+        state.targetDistance = saved.targetDistance;
+      }
+      state.lastHourDisplay = -1;
+      state.pointers.clear();
+      state.isDragging = false;
+      document.getElementById('stage')?.classList.remove('is-dragging');
+      applyCamera();
+      syncUI(true);
+      updateLighting(state.hour);
+    }, 280);
+  }
+
+  function seekTour(seconds) {
+    if (!tour.active) {
+      startTour({ capture: true, manual: true, loop: false });
+    }
+    tour.manual = true;
+    tour.loop = false;
+    tour.elapsed = clamp(seconds, 0, TOUR_DURATION);
+    tour.hold = 0;
+    tour.finished = tour.elapsed >= TOUR_DURATION;
+    shared.time = 12 + tour.elapsed;
+    const sample = fillTourSample(tour.elapsed);
+    state.hour = sample.hour;
+    state.lastHourDisplay = -1;
+    applyTourCamera(tour.elapsed);
+    updateTourOverlay(tour.elapsed);
+    syncUI(true);
+    updateLighting(state.hour);
+  }
+
+  function maybeAutoStartTour() {
+    if (tour.autoStarted) return;
+    const params = new URLSearchParams(window.location.search);
+    const wantsTour = params.has('demo') || params.has('tour');
+    if (!wantsTour || params.get('demo') === '0') return;
+    tour.autoStarted = true;
+    const capture = params.has('capture');
+    window.setTimeout(() => {
+      startTour({ capture, manual: capture, loop: !capture });
+    }, capture ? 1600 : 900);
   }
 
   /* ------------------------------------------------------------------ *
@@ -5847,17 +6180,21 @@
     const now = performance.now();
     const dt = Math.min(0.05, (now - lastTimestamp) / 1000);
     lastTimestamp = now;
-    shared.time += dt;
+    if (!(tour.active && tour.manual)) shared.time += dt;
 
-    if (state.auto && !state.isScrubbing) {
-      state.hour = (state.hour + dt * (24 / 150)) % 24;
+    if (tour.active) {
+      updateTourFrame(dt);
+    } else {
+      if (state.auto && !state.isScrubbing) {
+        state.hour = (state.hour + dt * (24 / 150)) % 24;
+      }
+
+      // Smooth camera motion.
+      state.azimuth = damp(state.azimuth, state.targetAzimuth, 5.2, dt);
+      state.polar = damp(state.polar, state.targetPolar, 5.2, dt);
+      state.distance = damp(state.distance, state.targetDistance, 3.6, dt);
+      applyCamera();
     }
-
-    // Smooth camera motion.
-    state.azimuth = damp(state.azimuth, state.targetAzimuth, 5.2, dt);
-    state.polar = damp(state.polar, state.targetPolar, 5.2, dt);
-    state.distance = damp(state.distance, state.targetDistance, 3.6, dt);
-    applyCamera();
 
     const p = updateLighting(state.hour);
     syncUI();
@@ -6003,18 +6340,19 @@
     });
 
     // Cloud glints and falling light.
+    const glassGlintDim = tour.active ? 0.62 : 1;
     for (const glint of glass.travellingGlints) {
       const u = glint.userData;
       const travel = 0.5 + 0.5 * Math.sin(shared.time * u.speed + u.phase);
       glint.position.set(u.x, -CUBE.half + travel * CUBE.size, u.z);
       const opacityPulse = 0.16 + 0.3 * Math.pow(0.5 + 0.5 * Math.sin(shared.time * 0.65 + u.phase * 2.0), 2);
-      glint.material.opacity = opacityPulse;
+      glint.material.opacity = opacityPulse * glassGlintDim;
       const s = 0.18 + 0.16 * Math.sin(shared.time * 0.5 + u.phase);
       glint.scale.setScalar(s);
     }
     glass.cornerGlows.forEach((sprite) => {
       const pulse = 0.5 + 0.5 * Math.sin(shared.time * 0.9 + sprite.userData.phase);
-      sprite.material.opacity = 0.22 + pulse * 0.18;
+      sprite.material.opacity = (0.22 + pulse * 0.18) * glassGlintDim;
       sprite.scale.setScalar(0.3 + pulse * 0.2);
     });
 
@@ -6024,7 +6362,7 @@
 
     camera.updateMatrixWorld();
     camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
-    focusView.copy(FOCUS_POINT).applyMatrix4(camera.matrixWorldInverse);
+    focusView.copy(tour.active ? tour.target : FOCUS_POINT).applyMatrix4(camera.matrixWorldInverse);
     post.uniforms.uFocusDepth.value = Math.max(0.5, -focusView.z);
     post.uniforms.uSceneTexel.value.set(1 / post.width, 1 / post.height);
     post.render(scene, camera, shared.time);
@@ -6043,6 +6381,7 @@
     if (document.body.classList.contains('is-loaded')) return;
     loadingEl.classList.add('is-hidden');
     document.body.classList.add('is-loaded');
+    maybeAutoStartTour();
     setTimeout(() => {
       loadingEl.style.display = 'none';
     }, 1400);
@@ -6056,6 +6395,7 @@
     camera.aspect = width / Math.max(1, height);
 
     const base = computeCameraDistance();
+    if (tour.active) refreshTourLayout();
     state.targetDistance = base * state.zoom;
     state.distance = Math.max(state.distance, base * 0.92);
 
@@ -6171,6 +6511,11 @@
         reflections,
         treeCount,
         palette,
+        tour,
+        TOUR_DURATION,
+        startTour,
+        stopTour,
+        seekTour,
         getPost: () => post,
       };
       // Prime shader compilation while the visitor watches the loading screen.
@@ -6184,7 +6529,22 @@
     window.addEventListener('resize', resize);
     document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') resetView();
+      if (event.key === 'Escape') {
+        if (tour.active) {
+          event.preventDefault();
+          stopTour();
+        } else {
+          resetView();
+        }
+        return;
+      }
+      if ((event.key === 'd' || event.key === 'D') && !tour.active && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        const tag = event.target && event.target.tagName;
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT' && tag !== 'BUTTON') {
+          event.preventDefault();
+          startTour();
+        }
+      }
     });
 
     running = true;

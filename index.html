@@ -37,6 +37,13 @@
         <span class="title-en" aria-hidden="true">AETHER<br>TERRARIUM</span>
       </div>
       <p class="dek">一方自成一体的微缩宇宙，<br class="mobile-break">悬在无声的深空里。</p>
+      <button id="tourButton" class="tour-entry" type="button" aria-label="观看镜头跟随演示">
+        <span class="tour-entry-mark" aria-hidden="true"><i></i></span>
+        <span class="tour-entry-copy">
+          <b>观看演示</b>
+          <em>CINEMATIC TOUR · ONE TAKE</em>
+        </span>
+      </button>
     </header>
 
     <aside class="archive" aria-label="展品信息">
@@ -102,6 +109,28 @@
       </div>
     </footer>
   </main>
+
+  <section id="cinema" class="cinema" aria-hidden="true" aria-label="电影感镜头演示">
+    <div class="cinema-bar cinema-bar-top" aria-hidden="true"></div>
+    <div class="cinema-bar cinema-bar-bottom" aria-hidden="true"></div>
+    <div class="cinema-brand" aria-hidden="true">
+      <span class="signal"></span>
+      <span>AETHER TERRARIUM</span>
+      <i></i>
+      <span>ONE-TAKE</span>
+    </div>
+    <button id="tourExit" class="cinema-exit" type="button" aria-label="退出演示">
+      <span>ESC</span> 退出
+    </button>
+    <div id="tourCaption" class="cinema-caption" aria-live="polite">
+      <span id="tourIndex" class="cinema-index">00 / 05</span>
+      <p id="tourKicker" class="cinema-kicker">AETHER TERRARIUM</p>
+      <h2 id="tourTitle" class="cinema-title">悬浮之境</h2>
+      <p id="tourSub" class="cinema-sub">一方悬浮在深空的微缩宇宙</p>
+    </div>
+    <div class="cinema-progress" aria-hidden="true"><span id="tourProgress"></span></div>
+    <div id="tourVeil" class="cinema-veil" aria-hidden="true"></div>
+  </section>
 
   <div id="loading" class="loading" role="status" aria-label="正在生成微缩世界">
     <div class="loading-inner">
