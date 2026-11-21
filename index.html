@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#04070d">
+  <meta name="color-scheme" content="dark">
+  <title>悬浮之境 · Aether Terrarium</title>
+  <meta name="description" content="一方悬浮于深空的玻璃微缩生态世界：雪山、河流、瀑布、森林与微小的生命，日与夜在其中缓缓流转。">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2304070c'/%3E%3Cpath d='M32 8 56 24v20L32 58 8 44V24z' fill='none' stroke='%23d9c194' stroke-width='2'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23a9dcff'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="ambient ambient-a" aria-hidden="true"></div>
+  <div class="ambient ambient-b" aria-hidden="true"></div>
+  <div id="stage" aria-label="悬浮之境三维微缩生态场景">
+    <canvas id="world"></canvas>
+  </div>
+  <div class="screen-grain" aria-hidden="true"></div>
+  <div class="screen-shade" aria-hidden="true"></div>
+
+  <main class="hud" aria-label="悬浮之境">
+    <span class="corner corner-tl" aria-hidden="true"></span>
+    <span class="corner corner-tr" aria-hidden="true"></span>
+    <span class="corner corner-bl" aria-hidden="true"></span>
+    <span class="corner corner-br" aria-hidden="true"></span>
+
+    <header class="masthead">
+      <div class="eyebrow">
+        <span class="signal" aria-hidden="true"></span>
+        <span>LIVING DIORAMA</span>
+        <span class="slash">/</span>
+        <span>NO. 07</span>
+      </div>
+      <div class="title-row">
+        <h1>悬浮之境</h1>
+        <span class="title-en" aria-hidden="true">AETHER<br>TERRARIUM</span>
+      </div>
+      <p class="dek">一方自成一体的微缩宇宙，<br class="mobile-break">悬在无声的深空里。</p>
+    </header>
+
+    <aside class="archive" aria-label="展品信息">
+      <div class="archive-rule"></div>
+      <p class="archive-head">SPECIMEN DATA</p>
+      <dl class="archive-list">
+        <div><dt>ORIGIN</dt><dd>THE QUIET BELT</dd></div>
+        <div><dt>HABITAT</dt><dd>SEALED BIOSPHERE</dd></div>
+        <div><dt>SCALE</dt><dd>1 : 2,400</dd></div>
+        <div><dt>SEASON</dt><dd>LATE SPRING</dd></div>
+      </dl>
+      <div class="archive-coord">
+        <span>36°14′ N</span>
+        <span>112°07′ E</span>
+      </div>
+      <div class="archive-live"><span class="signal" aria-hidden="true"></span> ALL SYSTEMS DREAMING</div>
+    </aside>
+
+    <div class="side-caption" aria-hidden="true">
+      <span>SNOW</span><i></i><span>RIVER</span><i></i><span>FOREST</span><i></i><span>LIFE</span>
+    </div>
+
+    <div class="mobile-hint" aria-hidden="true"><span></span>拖动旋转 · 双指缩放</div>
+
+    <footer class="controls">
+      <div class="quote">
+        <span class="quote-rule" aria-hidden="true"></span>
+        <p>雪线之上，云在缓慢地呼吸。<br><em>Everything here is alive, quietly.</em></p>
+      </div>
+
+      <section class="time-console" aria-label="昼夜控制">
+        <div class="time-top">
+          <button id="cycleToggle" class="cycle-toggle" type="button" aria-pressed="true" aria-label="暂停昼夜流转">
+            <span class="cycle-icon" aria-hidden="true"><i></i><i></i></span>
+            <span class="cycle-label">昼夜流转</span>
+          </button>
+          <div class="clock-wrap">
+            <span id="clock" class="clock">16:15</span>
+            <span id="phase" class="phase">斜阳 · GOLDEN HOUR</span>
+          </div>
+          <span id="cycleState" class="cycle-state"><span class="live-dot" aria-hidden="true"></span>LIVE</span>
+        </div>
+        <div class="timeline">
+          <div class="timeline-track" aria-hidden="true">
+            <div class="timeline-fill" id="timelineFill"></div>
+            <span class="timeline-glow" id="timelineGlow"></span>
+            <span class="tick" style="left:0%"></span>
+            <span class="tick" style="left:25%"></span>
+            <span class="tick" style="left:50%"></span>
+            <span class="tick" style="left:75%"></span>
+            <span class="tick" style="left:100%"></span>
+          </div>
+          <input id="timeRange" class="time-range" type="range" min="0" max="24" step="0.01" value="16.25" aria-label="调整一天中的时间">
+          <div class="time-ends" aria-hidden="true">
+            <span>00</span><span>06</span><span>12</span><span>18</span><span>24</span>
+          </div>
+        </div>
+      </section>
+
+      <div class="hint" aria-label="操作提示">
+        <span class="hint-art" aria-hidden="true"><span></span></span>
+        <span>拖动旋转<br><b>SCROLL TO DRAW CLOSER</b></span>
+      </div>
+    </footer>
+  </main>
+
+  <div id="loading" class="loading" role="status" aria-label="正在生成微缩世界">
+    <div class="loading-inner">
+      <div class="loading-mark" aria-hidden="true">
+        <span class="mark-ring"></span>
+        <span class="mark-star">✦</span>
+      </div>
+      <p class="loading-kicker">AETHER TERRARIUM</p>
+      <h2 class="loading-title">正在凝结一方世界</h2>
+      <div class="loading-bar"><span></span></div>
+      <p class="loading-note">SNOW · RIVER · FOREST · LIFE</p>
+    </div>
+  </div>
+
+  <div id="fatal" class="fatal" hidden>
+    <div>
+      <p class="loading-kicker">A QUIET INTERRUPTION</p>
+      <h2>这个世界暂时无法显形</h2>
+      <p id="fatalMessage">请使用支持 WebGL 的现代浏览器，并开启硬件加速。</p>
+    </div>
+  </div>
+
+  <noscript>
+    <div class="fatal"><div>
+      <h2>需要 JavaScript</h2>
+      <p>开启 JavaScript 后，这方微缩世界才会显现。</p>
+    </div></div>
+  </noscript>
+
+  <script src="./vendor/three.min.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
